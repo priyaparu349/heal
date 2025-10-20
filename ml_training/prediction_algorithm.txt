@@ -1,0 +1,52 @@
+
+// Prediction Algorithm for Edge Functions
+// ========================================
+
+function predictDisease(symptoms: string[]): Prediction {
+  const diseaseScores: Record<string, number> = {};
+
+  // Normalize symptoms
+  const normalizedSymptoms = symptoms.map(s =>
+    s.toLowerCase().trim().replace(/\s+/g, '_')
+  );
+
+  // Calculate score for each disease
+  for (const [disease, rules] of Object.entries(predictionRules)) {
+    let score = 0;
+    let matchCount = 0;
+
+    // Check each symptom against this disease's scoring rules
+    for (const symptom of normalizedSymptoms) {
+      if (rules.scoring_rules[symptom]) {
+        score += rules.scoring_rules[symptom];
+        matchCount++;
+      }
+    }
+
+    // Apply threshold
+    if (score >= rules.threshold && matchCount > 0) {
+      diseaseScores[disease] = score;
+    }
+  }
+
+  // Find disease with highest score
+  const predictedDisease = Object.keys(diseaseScores).reduce((a, b) =>
+    diseaseScores[a] > diseaseScores[b] ? a : b
+  );
+
+  const maxScore = diseaseScores[predictedDisease];
+  const confidence = Math.min(maxScore / 3.0, 1.0); // Normalize to 0-1
+
+  return {
+    disease: predictedDisease,
+    confidence: confidence,
+    alternativeMatches: Object.entries(diseaseScores)
+      .filter(([d]) => d !== predictedDisease)
+      .map(([disease, score]) => ({
+        disease,
+        confidence: Math.min(score / 3.0, 1.0)
+      }))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 3)
+  };
+}
