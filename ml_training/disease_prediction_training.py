@@ -20,6 +20,8 @@ import pandas as pd
 import numpy as np
 import pickle
 import json
+import os
+from pathlib import Path
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -57,19 +59,71 @@ print()
 print("Step 1: Loading Real Kaggle Dataset...")
 print("-" * 80)
 
+# Get script directory
+script_dir = Path(__file__).parent.absolute()
+print(f"Working Directory: {script_dir}")
+
+# Try multiple possible locations for CSV files
+possible_paths = [
+    script_dir,
+    Path.cwd(),
+    script_dir.parent / 'data',
+    Path.cwd() / 'data'
+]
+
+training_csv = None
+testing_csv = None
+
+for path in possible_paths:
+    training_candidate = path / 'Training.csv'
+    testing_candidate = path / 'Testing.csv'
+
+    if training_candidate.exists():
+        training_csv = training_candidate
+        if testing_candidate.exists():
+            testing_csv = testing_candidate
+        break
+
+if training_csv is None:
+    print("\n" + "!" * 80)
+    print("ERROR: Dataset files not found!")
+    print("!" * 80)
+    print(f"\nSearched in the following locations:")
+    for path in possible_paths:
+        print(f"  - {path}")
+    print("\n" + "=" * 80)
+    print("MANUAL SETUP REQUIRED")
+    print("=" * 80)
+    print("\n1. Download the Kaggle dataset from:")
+    print("   https://www.kaggle.com/datasets/kaushil268/disease-prediction-using-machine-learning")
+    print("\n2. Extract and place these files in THIS directory:")
+    print(f"   {script_dir}")
+    print("\n   Required files:")
+    print("   - Training.csv")
+    print("   - Testing.csv")
+    print("\n3. Verify the files are in place:")
+    print(f"   Training.csv should be at: {script_dir / 'Training.csv'}")
+    print(f"   Testing.csv should be at: {script_dir / 'Testing.csv'}")
+    print("\n4. Run this script again:")
+    print("   python disease_prediction_training.py")
+    print("\n" + "!" * 80)
+    exit(1)
+
 try:
     # Load training data
-    df_train = pd.read_csv('Training.csv')
+    print(f"\nLoading from: {training_csv}")
+    df_train = pd.read_csv(training_csv)
     print(f"✓ Training.csv loaded: {df_train.shape[0]} samples, {df_train.shape[1]} features")
 
     # Load testing data
-    try:
-        df_test = pd.read_csv('Testing.csv')
+    if testing_csv and testing_csv.exists():
+        print(f"Loading from: {testing_csv}")
+        df_test = pd.read_csv(testing_csv)
         print(f"✓ Testing.csv loaded: {df_test.shape[0]} samples")
         # Combine for full dataset to ensure proper splitting
         df = pd.concat([df_train, df_test], ignore_index=True)
         print(f"✓ Combined dataset: {df.shape[0]} samples")
-    except FileNotFoundError:
+    else:
         df = df_train
         print("! Testing.csv not found, using Training.csv only")
 
@@ -87,16 +141,15 @@ try:
     for disease, count in disease_counts.head(10).items():
         print(f"  - {disease}: {count} samples")
 
-except FileNotFoundError as e:
+except Exception as e:
     print("\n" + "!" * 80)
-    print("ERROR: Dataset files not found!")
+    print("ERROR: Failed to load dataset!")
     print("!" * 80)
     print(f"\n{str(e)}")
-    print("\nPlease download and place the following files in this directory:")
-    print("  - Training.csv")
-    print("  - Testing.csv")
-    print("\nDownload from:")
-    print("https://www.kaggle.com/datasets/kaushil268/disease-prediction-using-machine-learning")
+    print("\nPlease verify:")
+    print("  1. The CSV files are not corrupted")
+    print("  2. The files contain the 'prognosis' column")
+    print("  3. The files are properly formatted CSV files")
     print("\n" + "!" * 80)
     exit(1)
 
