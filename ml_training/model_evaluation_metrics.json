@@ -1,7 +1,7 @@
 {
   "model_name": "RandomForestClassifier",
   "version": "1.0",
-  "training_date": "2025-10-20T23:25:45.602900",
+  "training_date": "2025-10-20T23:50:23.014317",
   "dataset_info": {
     "total_samples": 4920,
     "train_samples": 3936,
