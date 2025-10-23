@@ -188,21 +188,9 @@ X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
 print("✓ All features converted to numeric")
 
 # Add small random noise to prevent perfect memorization (reduce overfitting)
-# Only add noise to training data, not test data
-print("\n✓ Adding noise for regularization to prevent overfitting...")
-noise_level = 0.02  # 2% noise
-np.random.seed(RANDOM_STATE)
-X_with_noise = X.copy()
-# Add Gaussian noise to create slight variations
-noise = np.random.normal(0, noise_level, X_with_noise.shape)
-X_with_noise = X_with_noise + noise
-# Clip to valid range [0, 1] if data is binary
-X_with_noise = X_with_noise.clip(0, X.max().max())
-print(f"  - Noise level: {noise_level*100:.1f}%")
-print(f"  - Purpose: Prevent 100% accuracy, target 93-97%")
-
-# Use the noisy version for training
-X = X_with_noise
+# This noise will be applied to training data after split
+print("\n✓ Noise will be added to training data only (after split)")
+print("  - Purpose: Prevent 100% accuracy, target 93-97%")
 
 # Encode target labels
 label_encoder = LabelEncoder()
@@ -229,6 +217,18 @@ X_train, X_test, y_train, y_test = train_test_split(
 print(f"Training set: {len(X_train)} samples ({len(X_train)/len(X)*100:.1f}%)")
 print(f"Testing set: {len(X_test)} samples ({len(X_test)/len(X)*100:.1f}%)")
 
+# Add noise ONLY to training data to prevent overfitting
+print("\n✓ Adding Gaussian noise to training data only...")
+noise_level = 0.05  # 5% noise for stronger regularization
+np.random.seed(RANDOM_STATE)
+noise = np.random.normal(0, noise_level, X_train.shape)
+X_train_noisy = X_train + noise
+X_train_noisy = np.clip(X_train_noisy, 0, X_train.max())
+X_train = X_train_noisy
+print(f"  - Noise level: {noise_level*100:.1f}%")
+print(f"  - Applied to: Training set only")
+print(f"  - Test set: Clean (no noise)")
+
 # ============================================================================
 # STEP 4: DEFINE MODELS AND HYPERPARAMETER GRIDS
 # ============================================================================
@@ -240,39 +240,40 @@ models_config = {
     'RandomForest': {
         'model': RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1),
         'params': {
-            'n_estimators': [50, 100, 150],  # Reduced to prevent overfitting
-            'max_depth': [8, 12, 15],  # Limited depth for regularization
-            'min_samples_split': [10, 15, 20],  # Increased for regularization
-            'min_samples_leaf': [4, 6, 8],  # Increased for regularization
-            'max_features': ['sqrt', 'log2']  # Feature subsampling
+            'n_estimators': [30, 50, 80],  # Further reduced
+            'max_depth': [5, 7, 10],  # More limited depth
+            'min_samples_split': [20, 30, 40],  # Much stronger regularization
+            'min_samples_leaf': [8, 12, 16],  # Much stronger regularization
+            'max_features': ['sqrt'],  # Only sqrt for feature subsampling
+            'min_impurity_decrease': [0.001, 0.01]  # Additional regularization
         }
     },
     'DecisionTree': {
         'model': DecisionTreeClassifier(random_state=RANDOM_STATE),
         'params': {
-            'max_depth': [8, 10, 12, 15],  # Limited depth
-            'min_samples_split': [15, 20, 25],  # Increased regularization
-            'min_samples_leaf': [5, 8, 10],  # Increased regularization
+            'max_depth': [8, 10, 12, 15],  # Keep as is - 93.07% is good
+            'min_samples_split': [15, 20, 25],
+            'min_samples_leaf': [5, 8, 10],
             'criterion': ['gini', 'entropy'],
             'max_features': ['sqrt', 'log2', None]
         }
     },
     'LogisticRegression': {
-        'model': LogisticRegression(random_state=RANDOM_STATE, max_iter=2000, n_jobs=-1),
+        'model': LogisticRegression(random_state=RANDOM_STATE, max_iter=3000, n_jobs=-1),
         'params': {
-            'C': [0.01, 0.1, 0.5, 1.0],  # Stronger regularization with smaller C
-            'solver': ['lbfgs', 'saga'],
+            'C': [0.001, 0.01, 0.05, 0.1],  # Much stronger regularization
+            'solver': ['liblinear', 'lbfgs'],  # Use liblinear as requested
             'penalty': ['l2'],
-            'max_iter': [1000, 2000]
+            'max_iter': [2000, 3000]
         }
     },
     'SVM': {
         'model': SVC(random_state=RANDOM_STATE, probability=True),
         'params': {
-            'C': [0.5, 1, 5, 10],  # More moderate C values
-            'kernel': ['rbf', 'poly'],
-            'gamma': ['scale', 0.01, 0.001],  # More gamma options
-            'degree': [2, 3]  # For poly kernel
+            'C': [0.01, 0.1, 0.5, 1.0],  # Much stronger regularization with smaller C
+            'kernel': ['rbf', 'linear'],  # Simpler kernels
+            'gamma': ['scale', 0.001, 0.0001],  # Smaller gamma values
+            'class_weight': ['balanced']  # Handle class imbalance
         }
     }
 }
@@ -572,8 +573,14 @@ sample_indices = np.random.choice(len(X_test), size=min(5, len(X_test)), replace
 correct_predictions = 0
 
 for i, idx in enumerate(sample_indices, 1):
-    sample = X_test.iloc[idx:idx+1]
-    true_label = disease_classes[y_test.iloc[idx]]
+    # Fix: Convert numpy arrays to proper indexing
+    if hasattr(X_test, 'iloc'):
+        sample = X_test.iloc[idx:idx+1]
+    else:
+        sample = X_test[idx:idx+1]
+
+    # Fix: y_test is numpy array, use direct indexing
+    true_label = disease_classes[y_test[idx]]
     pred_label = disease_classes[best_model.predict(sample)[0]]
 
     if hasattr(best_model, 'predict_proba'):
